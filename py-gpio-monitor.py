@@ -21,6 +21,8 @@ username    = "<<username>>"
 password    = "<<password>>"
 
 clientId    = "pyGPIOmon"
+baseTopic   = "pyGPIOmon"
+
 deviceName  = "PyGPIO Monitor"
 LOGFILE     = "./py-gpio-monitor.log"
 LOG_LEVEL   = LOG_INFO
@@ -74,13 +76,14 @@ def getConfig(cf):
   username = secServer.get('username')
   password = secServer.get('password')
   clientId = secServer.get('clientid','pyGPIOmon')
+  baseTopic = secServer.get('basetopic','pyGPIOmon')
 
 def console(msg):
   ts = datetime.datetime.now().isoformat(timespec="seconds")
   print(ts,msg)
 
 class PyGPIOmon:
-  def __init__(self, clientId, name, mqttClient, gpios, pi, logFile):
+  def __init__(self, clientId, name, mqttClient, gpios, pi, logFile, baseTopic):
     print("Initializing")
     self._clientId = clientId
     self._name = name
@@ -97,6 +100,8 @@ class PyGPIOmon:
     self._mqtt.on_publish = self.on_publish
     self._mqtt.on_connect = self.on_mqtt_connect
     self._mqtt_reconnect = 0
+    self._baseTopic = baseTopic
+    self._aliveTime = 0
 
   def stop(self):
     for g in self._gpios:
@@ -132,15 +137,20 @@ class PyGPIOmon:
       if self._mqtt_reconnect > 0:
         self.logW("MQTT Reconnecting...")
         self._mqtt.reconnect()
-      t = pi.get_current_tick()  
+      t = pi.get_current_tick()
       for g in self._gpios:
         if (pigpio.tickDiff(self._gpios[g]['t'],t) > 50000 and self._gpios[g]['u'] == True ):  # announce change only after some stable period
           print('Sending ',g)
           self._gpios[g]['u'] = False
           if self._gpios[g]['s'] == 1:
-            self.publish('GPIO:'+str(g),"ON")
+            self.publish('gpio/'+str(g),"ON")
           else:
-            self.publish('GPIO:'+str(g),"OFF")
+            self.publish('gpio/'+str(g),"OFF")
+      if time.time() - self._aliveTime > 30:
+        ts = datetime.datetime.now().isoformat(timespec="seconds")
+        self._aliveTime = time.time()
+        print(ts,"pyGPIOmon is alive")
+        self.publish('alive',ts)
 
   def logW(self, msg):
     self.log(msg, level=LOG_WARN)
@@ -163,11 +173,12 @@ class PyGPIOmon:
     self._f.write(ts + "  " + l[level] + "  " + msg + "\n")
    
   # display all incoming messages
-  def on_message(self, userdata, message):
+  def on_message(self, client, userdata, message):
     self.logI("MQTT received msg="+str(message.payload))
   
-  def on_publish(self, userdata, mid):
-    self.receivedMessages.append(mid)
+  def on_publish(self, client, userdata, mid):
+    print("mqtt received=",mid)
+    # self.receivedMessages.append(mid)
   
   def on_mqtt_connect(self, client, userdata, flags, rc):
     self.mqtt_connected = rc
@@ -189,7 +200,8 @@ class PyGPIOmon:
   
   # publish a message
   def publish(self, topic, message, waitForAck = False):
-    mid = self._mqtt.publish(topic, message, 1)[1]
+    print("publishing topic=",self._baseTopic+'/'+topic,"message=",message)
+    mid = self._mqtt.publish(self._baseTopic+'/'+topic, message, 1)[1]
     if (waitForAck):
         while mid not in self.receivedMessages:
             time.sleep(0.25)
@@ -228,15 +240,11 @@ mqtt.username_pw_set(username, password)
 mqtt.connect_async(serverUrl)
 
 print("Creating PyGPIOmon device as",clientId)
-mon = PyGPIOmon(clientId, deviceName, mqtt, gpios, pi, LOGFILE)
+mon = PyGPIOmon(clientId, deviceName, mqtt, gpios, pi, LOGFILE, baseTopic)
 mon.start()
 
 try:
-  t=time.time()
   while True:
-    if time.time()-t > 30:
-      console("PyGPIOmon is alive")
-      t=time.time()
     time.sleep(1)
     mon.loop()
 except KeyboardInterrupt:
