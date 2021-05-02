@@ -73,59 +73,74 @@ def getConfig(cf):
   serverUrl = secServer.get('url','localhost')
   username = secServer.get('username')
   password = secServer.get('password')
-  clientId = secServer.get('clientid','pyGPIOmon')  
+  clientId = secServer.get('clientid','pyGPIOmon')
 
-class PyGPIOmon(threading.Thread):
+def console(msg):
+  ts = datetime.datetime.now().isoformat(timespec="seconds")
+  print(ts,msg)
+
+class PyGPIOmon:
   def __init__(self, clientId, name, mqttClient, gpios, pi, logFile):
-    threading.Thread.__init__(self)
-    self.clientId = clientId
-    self.name = name
-    self.running = True
-    self.mqtt = mqttClient # mqtt client
-    self.gpios = gpios # array of gpio numbers to monitor
-    self.logF = logFile # log file name
-    self.pi = pi  # pigpio instance
-    self.f = 0  # logfile
-    self.mqtt.on_message = self.on_message
-    self.mqtt.on_publish = self.on_publish
-    self.mqtt.on_connect = self.on_mqtt_connect
-    self.mqtt_reconnect = 0
-    self.cbs = [] # array of gpio callbacks
-    self.ticks = {}
+    print("Initializing")
+    self._clientId = clientId
+    self._name = name
+    self._running = True
+    self._mqtt = mqttClient # mqtt client
+    self._gpios = {}
+    for g in gpios: 
+      self._gpios[g]={'t':0, 's':0, 'u':False} # object constaining gpio statuses
+    print('initialized', self._gpios)
+    self._logF = logFile # log file name
+    self._pi = pi  # pigpio instance
+    self._f = 0  # logfile
+    self._mqtt.on_message = self.on_message
+    self._mqtt.on_publish = self.on_publish
+    self._mqtt.on_connect = self.on_mqtt_connect
+    self._mqtt_reconnect = 0
 
   def stop(self):
-    for c in self.cbs:
-      c.cancel()
+    for g in self._gpios:
+      self._gpios[g]['cb'].cancel()
   
-  def run(self):
-    print("Starting " + self.name)
-    print("Opening log file " + self.logF)
+  def start(self):
+    print("Starting " + self._name)
+    print("Opening log file " + self._logF)
 
     try:
-      self.f = open(self.logF, "a")
+      self._f = open(self._logF, "a")
     except FileNotFoundError:
       print("Error opening log file.")
       exit(1)
 
     self.logI("*** PyGPIOmon Starting")
     self.logI("Starting MQTT client")
-    self.mqtt.loop_start()
-    self.mqtt.subscribe("cmd/"+self.clientId)
+    self._mqtt.loop_start()
+    self._mqtt.subscribe("cmd/"+self._clientId)
 
     print("Connecting to gpios")
     # register callback function for interrupts
-    tick=pi.get_current_tick()
-    for g in self.gpios:
-      self.cbs.append(pi.callback(g, pigpio.EITHER_EDGE, self.cbf))
-      self.ticks[g]=tick
+    t = pi.get_current_tick()
+    for g in self._gpios:
+      print("g=",g)
+      self._gpios[g]['cb'] = pi.callback(g, pigpio.EITHER_EDGE, self.cbf)
+      self._gpios[g]['t'] = t
     
-    print("Starting monitoring loop")
-    while self.running:
-      if self.mqtt_reconnect > 0:
+    print("GPIO monitor started.")
+    
+  def loop(self):
+    if self._running:
+      if self._mqtt_reconnect > 0:
         self.logW("MQTT Reconnecting...")
-        self.mqtt.reconnect()
-      else:
-        time.sleep(10)
+        self._mqtt.reconnect()
+      t = pi.get_current_tick()  
+      for g in self._gpios:
+        if (pigpio.tickDiff(self._gpios[g]['t'],t) > 50000 and self._gpios[g]['u'] == True ):  # announce change only after some stable period
+          print('Sending ',g)
+          self._gpios[g]['u'] = False
+          if self._gpios[g]['s'] == 1:
+            self.publish('GPIO:'+str(g),"ON")
+          else:
+            self.publish('GPIO:'+str(g),"OFF")
 
   def logW(self, msg):
     self.log(msg, level=LOG_WARN)
@@ -145,7 +160,7 @@ class PyGPIOmon(threading.Thread):
     l = ["F","E","W","I","D"]
     ts = datetime.datetime.now().isoformat(timespec="seconds")
     print(ts + "  " + l[level] + "  " + msg)
-    self.f.write(ts + "  " + l[level] + "  " + msg + "\n")
+    self._f.write(ts + "  " + l[level] + "  " + msg + "\n")
    
   # display all incoming messages
   def on_message(self, userdata, message):
@@ -156,38 +171,38 @@ class PyGPIOmon(threading.Thread):
   
   def on_mqtt_connect(self, client, userdata, flags, rc):
     self.mqtt_connected = rc
-    self.mqtt_reconnect = 0
+    self._mqtt_reconnect = 0
     if rc != 0:
       self.logE("MQTT connection returned result="+rc)
-      self.mqtt_reconnect += 1
-      if self.mqtt_reconnect > 12: self.mqtt_reconnect = 12
-      self.mqtt_reconnect_delay = 2**self.mqtt_reconnect
+      self._mqtt_reconnect += 1
+      if self._mqtt_reconnect > 12: self._mqtt_reconnect = 12
+      self.mqtt_reconnect_delay = 2**self._mqtt_reconnect
     else:
       self.logI("Connected to MQTT broker.")
   
   def on_mqtt_disconnect(self, client, userdata, rc):
-    self.mqtt_reconnect = 1
+    self._mqtt_reconnect = 1
     if rc != 0:
       self.logE("MQTT unexpected disconnection.")
-      self.mqtt_reconnect = True
+      self._mqtt_reconnect = True
       self.mqtt_reconnect_delay = 10
   
   # publish a message
   def publish(self, topic, message, waitForAck = False):
-    mid = self.mqtt.publish(topic, message, 1)[1]
+    mid = self._mqtt.publish(topic, message, 1)[1]
     if (waitForAck):
         while mid not in self.receivedMessages:
             time.sleep(0.25)
 
   # callback for interrupts
-  def cbf(GPIO, level, tick):
-    if tick - 50000 > self.ticks[GPIO]: # debounce 50ms
-      self.ticks[GPIO] = tick
-      if level == pigpio.RISING_EDGE:
-        self.publish('GPIO:'+str(GPIO),"ON")
-      if level == pigpio.FALLING_EDGE:
-        self.publish('GPIO:'+str(GPIO),"OFF")
-
+  def cbf(self, GPIO, level, tick):
+    print("GPIO status changed",GPIO,level)
+    self._gpios[GPIO]['t'] = tick
+    self._gpios[GPIO]['u'] = True
+    if level == pigpio.RISING_EDGE:
+      self._gpios[GPIO]['s'] = 1
+    else:
+      self._gpios[GPIO]['s'] = 0
 
 #-------------------------------------------------------
 getOptions(sys.argv[1:])
@@ -217,10 +232,13 @@ mon = PyGPIOmon(clientId, deviceName, mqtt, gpios, pi, LOGFILE)
 mon.start()
 
 try:
-  time.sleep(30)
+  t=time.time()
   while True:
-    print("PyGPIOmon Alive")
-    time.sleep(900)
+    if time.time()-t > 30:
+      console("PyGPIOmon is alive")
+      t=time.time()
+    time.sleep(1)
+    mon.loop()
 except KeyboardInterrupt:
   print("\nTidying up")
   mon.stop()
