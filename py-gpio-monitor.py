@@ -21,7 +21,6 @@ username    = "<<username>>"
 password    = "<<password>>"
 
 clientId    = "pyGPIOmon"
-baseTopic   = "pyGPIOmon"
 
 deviceName  = "PyGPIO Monitor"
 LOGFILE     = "./py-gpio-monitor.log"
@@ -76,14 +75,13 @@ def getConfig(cf):
   username = secServer.get('username')
   password = secServer.get('password')
   clientId = secServer.get('clientid','pyGPIOmon')
-  baseTopic = secServer.get('basetopic','pyGPIOmon')
 
 def console(msg):
   ts = datetime.datetime.now().isoformat(timespec="seconds")
   print(ts,msg)
 
 class PyGPIOmon:
-  def __init__(self, clientId, name, mqttClient, gpios, pi, logFile, baseTopic):
+  def __init__(self, clientId, name, mqttClient, gpios, pi, logFile):
     print("Initializing")
     self._clientId = clientId
     self._name = name
@@ -100,7 +98,6 @@ class PyGPIOmon:
     self._mqtt.on_publish = self.on_publish
     self._mqtt.on_connect = self.on_mqtt_connect
     self._mqtt_reconnect = 0
-    self._baseTopic = baseTopic
     self._aliveTime = 0
 
   def stop(self):
@@ -200,8 +197,8 @@ class PyGPIOmon:
   
   # publish a message
   def publish(self, topic, message, waitForAck = False):
-    print("publishing topic=",self._baseTopic+'/'+topic,"message=",message)
-    mid = self._mqtt.publish(self._baseTopic+'/'+topic, message, 1)[1]
+    print("publishing topic=",self._clientId+'/'+topic,"message=",message)
+    mid = self._mqtt.publish(self._clientId+'/'+topic, message, 1)[1]
     if (waitForAck):
         while mid not in self.receivedMessages:
             time.sleep(0.25)
@@ -240,7 +237,7 @@ mqtt.username_pw_set(username, password)
 mqtt.connect_async(serverUrl)
 
 print("Creating PyGPIOmon device as",clientId)
-mon = PyGPIOmon(clientId, deviceName, mqtt, gpios, pi, LOGFILE, baseTopic)
+mon = PyGPIOmon(clientId, deviceName, mqtt, gpios, pi, LOGFILE)
 mon.start()
 
 try:
