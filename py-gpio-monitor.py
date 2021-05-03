@@ -208,13 +208,13 @@ class PyGPIOmon:
 
   # callback for interrupts
   def cbf(self, GPIO, level, tick):
-    print("GPIO status changed",GPIO,level)
     self._gpios[GPIO]['t'] = tick
     self._gpios[GPIO]['u'] = True
-    if level == pigpio.RISING_EDGE:
+    if level == 1:
       self._gpios[GPIO]['s'] = 1
     else:
       self._gpios[GPIO]['s'] = 0
+    print("GPIO status changed",GPIO,level,self._gpios[GPIO])
 
 #-------------------------------------------------------
 getOptions(sys.argv[1:])
