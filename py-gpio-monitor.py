@@ -149,21 +149,25 @@ class Logger:
 
 
 class App:
-    def __init__(self, mqttClient, logger):
+    def __init__(self, id, mqttClient, logger):
+        self.id = id
         self.log = logger
         self._mqtt = mqttClient
         self._mqtt_reconnect = 0  # reconnect count
 
-        self._mqtt.on_message = self.on_mqtt_message
-        self._mqtt.on_publish = self.on_mqtt_publish
-        self._mqtt.on_connect = self.on_mqtt_connect
-        self._mqtt.on_disconnect = self.on_mqtt_disconnect
+        self._mqtt.on_message = self._on_mqtt_message
+        self._mqtt.on_publish = self._on_mqtt_publish
+        self._mqtt.on_connect = self._on_mqtt_connect
+        self._mqtt.on_disconnect = self._on_mqtt_disconnect
 
-    def on_mqtt_connect(self, client, userdata, flags, rc):
+        self.log.all("subscribing to MQTT channel", "cmd/"+self.id)
+        self._mqtt.subscribe("cmd/"+self.id, 1)
+
+    def _on_mqtt_connect(self, client, userdata, flags, rc):
         self.mqtt_connected = rc
         self._mqtt_reconnect = 0
         if rc != 0:
-            self.logE("MQTT connection returned result="+rc)
+            self.log.err("MQTT connection returned result="+rc)
             self._mqtt_reconnect += 1
             if self._mqtt_reconnect > 12:
                 self._mqtt_reconnect = 12
@@ -171,7 +175,7 @@ class App:
         else:
             self.log.info("Connected to MQTT broker.")
 
-    def on_mqtt_disconnect(self, client, userdata, rc):
+    def _on_mqtt_disconnect(self, client, userdata, rc):
         self._mqtt_reconnect = 1
         if rc != 0:
             self.log.err("MQTT unexpected disconnection.")
@@ -179,11 +183,11 @@ class App:
             self.mqtt_reconnect_delay = 10
 
     # display all incoming messages
-    def on_mqtt_message(self, client, userdata, message):
-        self.log.debug("MQTT received msg="+str(message.payload))
-        print("MQTT received msg="+str(message.payload))
+    def _on_mqtt_message(self, client, userdata, message):
+        self.log.debug("MQTT message="+str(message.payload))
+        print("MQTT message="+str(message.payload))
 
-    def on_mqtt_publish(self, client, userdata, mid):
+    def _on_mqtt_publish(self, client, userdata, mid):
         self.log.debug("MQTT received=", mid)
 
     def loop(self):
@@ -193,6 +197,9 @@ class App:
 
 
 class PyGPIOmon:
+    GPIOStatesStrings = "on ON 1 off OFF 0"
+    GPIOStatesStringsPositive = 7
+
     def __init__(self, id, pi, mqttClient, *, qos=1, gpios=[], gpios_set=[], logger=Logger()):
 
         self._id = id
@@ -200,9 +207,6 @@ class PyGPIOmon:
         self._mqtt = mqttClient  # mqtt client
         self.log = logger
         self._qos = qos
-
-        self.log.all("subscribing to MQTT channel", "cmd/"+self._id)
-        self._mqtt.subscribe("cmd/"+self._id)
 
         self._gpios = {}
         for g in gpios:
@@ -216,19 +220,18 @@ class PyGPIOmon:
             print("print", c, g)
 
             self.log.all("subscribing to MQTT channel", c)
+            self._mqtt.subscribe(c, 1)
 
             self._mqtt.message_callback_add(
                 c,
-                lambda self, client, userdata, message:
-                    print("here", message)
-                    #self.on_mqtt_gpio_set(g, message)
+                lambda client, userdata, message:
+                    self.on_mqtt_gpio_set(g, str(message.payload.decode()))
             )
-
-        # self._f = 0  # logfile
 
         self._aliveTime = 0
 
     def stop(self):
+        self.log.all("*** PyGPIOmon Shutting down", self._id)
         for g in self._gpios:
             self._gpios[g]['cb'].cancel()
 
@@ -264,8 +267,15 @@ class PyGPIOmon:
             self.log.all("pyGPIOmon=", self._id, " is alive")
             self.publish('alive', ts, self._qos, retain=True)
 
-    def on_mqtt_gpio_set(self, gpio, message):
-        self.log.debug("GPIO should be set=", str(message.payload))
+    def on_mqtt_gpio_set(self, gpio, payload):
+        i = self.GPIOStatesStrings.find(payload)
+        self.log.debug("GPIO ", gpio, "received", payload, i)
+
+        if i < 0:
+            return
+        on = 1 if i <= self.GPIOStatesStringsPositive else 0
+        self.log.info("GPIO ", gpio, "set to", on)
+        pi.write(gpio, on)
 
     # publish a message
     def publish(self, topic, message, qos=1, retain=False):
@@ -282,6 +292,10 @@ class PyGPIOmon:
         else:
             self._gpios[GPIO]['s'] = 0
         self.log.debug("GPIO status changed", GPIO, level, self._gpios[GPIO])
+
+
+def on_message(client, userdata, message):
+    print("MESSAGE", message.payload.decode())
 
 
 # -------------------------------------------------------
@@ -308,12 +322,9 @@ print("Going to set gpios=", cfg.gpiosSet)
 print("Creating MQTT client for", cfg.serverUrl)
 mqttc = mqtt.Client(cfg.devId)
 mqttc.username_pw_set(cfg.username, cfg.password)
-mqttc.connect_async(cfg.serverUrl)
+mqttc.connect(cfg.serverUrl)
 
-print("Starting MQTT client")
-mqttc.loop_start()
-
-app = App(mqttc, log)
+app = App(cfg.devId, mqttc, log)
 
 print("Creating PyGPIOmon device as", cfg.devId)
 device = PyGPIOmon(cfg.devId, pi, mqttc,
@@ -322,16 +333,19 @@ device = PyGPIOmon(cfg.devId, pi, mqttc,
                    gpios=cfg.gpios,
                    gpios_set=cfg.gpiosSet)
 device.start()
+mqttc.loop_start()
 
 try:
     while True:
         time.sleep(1)
         app.loop()
         device.loop()
+
 except KeyboardInterrupt:
     print("\nTidying up")
-    device.stop()
 
+device.stop()
 log.stop()
 mqttc.disconnect()
+mqttc.loop_stop()
 pi.stop()
