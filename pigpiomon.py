@@ -26,7 +26,7 @@ class Config:
         self.logLevel = Logger.LOG_INFO
         self.gpios = []  # array of monitored gpios
         self.gpiosSet = []  # array of settable gpios
-        self.configFile = './pigpiomon.ini'
+        self.configFile = './pigpiomon.cfg'
         self.qos = 1
 
         self.parse_args(argv)
@@ -43,7 +43,7 @@ class Config:
         print('  -l | --logfile: log file name,default is '+self.logfile)
         print()
         print('Example: '+sys.argv[0] +
-              ' -c /etc/pigpiomon.ini -v 2 -l /var/log/pigpiomon.log')
+              ' -c /etc/pigpiomon.cfg -v 2 -l /var/log/pigpiomon.log')
 
     def parse_args(self, argv):
         try:

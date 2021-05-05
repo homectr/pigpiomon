@@ -1,36 +1,22 @@
-# py-gpgio-monitor
+# Raspberry Pi GPIO monitor MQTT client
 
-Raspberry Pi GPIO monitor MQTT client
+Python script which
+
+- monitors specified GPIOS and sends changes to specified MQTT broker
+- listens to MQTT channels and sets specified GPIOS accordingly
+
+# Requires
+
+1. `pigpio` daemon/package installed and running
+1. `python3` and `pip`
 
 # Installation
 
-1. install Python 3
-1. install Python libs\
-   `pip install paho-mqtt pigpio`
-1. copy script and configuration ini file to any directory, e.g. user home
-1. prepare empty log file\
-   `sudo touch /var/log/pigpiomon.log`\
-   `sudo chown openhabian /var/log/pigpiomon.log`
-1. copy `pigpiomon.service` to `/lib/systemd/system`
-1. modify service file as needed
-1. make systemctl daemon aware of new service, run\
-   `sudo systemctl daemon-reload`
-1. enable and start service\
-   `sudo systemctl enable pigpiomon.service`\
-   `sudo systemctl start pigpiomon.service`
-1. create empty logrotate configuration in `/etc/logrotate.d/pigpiomon`
-1. copy-paste following configuration\
-   ````/var/log/pigpiomon.log {
-     size 5M
-     rotate 3
-     missingok
-     dateext
-     copytruncate
-     compress
-     delaycompress
-   }```
-   ````
-1. restart logrotate service
+1. copy project files to your local folder
+1. make script `install.sh` executable
+   `chmod +x install.sh`
+1. run install.sh
+   `./install.sh`
 
 # Configuration file
 

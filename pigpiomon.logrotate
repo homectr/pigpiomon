@@ -1,0 +1,9 @@
+/var/log/pigpiomon.log {
+    size 5M
+    rotate 3
+    missingok
+    dateext
+    copytruncate
+    compress
+    delaycompress
+}

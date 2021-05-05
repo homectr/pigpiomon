@@ -3,7 +3,7 @@ Description=PiGPIO Monitor MQTT client
 
 [Service]
 WorkingDirectory=/opt/pigpiomon
-ExecStart=/usr/bin/python3 /opt/pigpiomon/pigpiomon.py
+ExecStart=/usr/bin/python3 /opt/pigpiomon/pigpiomon.py -c /etc/pigpiomon.cfg -l /var/log/pigpiomon.log
 Environment=PYTHONUNBUFFERED=1
 
 [Install]
