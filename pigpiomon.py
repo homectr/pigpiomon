@@ -265,7 +265,7 @@ class PiGPIOmon:
                 else:
                     self.publish('gpio/'+str(g), "OFF", self._qos)
         if time.time() - self._aliveTime > 30:
-            ts = datetime.datetime.now().isoformat(timespec="seconds")
+            ts = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
             self._aliveTime = time.time()
             self.log.all("pygpiomon=", self._id, " is alive")
             self.publish('alive', ts, self._qos, retain=True)

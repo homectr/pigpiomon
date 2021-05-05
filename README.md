@@ -43,9 +43,12 @@ gpios_mon=23
 
 # MQTT channels
 
-Publishing "ON"/"OFF" status on channels `{clientId}/{gpio}`
-Publishing alive status as ISO date on channel `{clientId}/alive`
-Accepting gpio status changes "ON/OFF" or "1/0" on channels `{clientid}/cmd/gpio/{gpio}`
+### Publishes to
+- `{clientId}/{gpio}` - publishing "ON"/"OFF" status on channels 
+- `{clientId}/alive` - ISO datetime updated every 30s
+
+### Subscribed to
+- `{clientid}/cmd/gpio/{gpio}` - gpio status changes "ON/OFF" or "1/0"
 
 # Usage
 
