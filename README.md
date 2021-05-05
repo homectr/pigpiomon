@@ -47,7 +47,7 @@ gpios_mon=23
 - `{clientId}/{gpio}` - publishing "ON"/"OFF" status on channels 
 - `{clientId}/alive` - ISO datetime updated every 30s
 
-### Subscribed to
+### Subscribes to
 - `{clientid}/cmd/gpio/{gpio}` - gpio status changes "ON/OFF" or "1/0"
 
 # Usage
