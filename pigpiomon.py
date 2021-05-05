@@ -8,6 +8,9 @@ import configparser
 import sys
 import getopt
 import pigpio
+import signal
+
+runScript = True  # global var managing script's loop cycle
 
 
 class Config:
@@ -17,19 +20,19 @@ class Config:
         self.username = "<<username>>"
         self.password = "<<password>>"
 
-        self.devId = "pyGPIOmon"  # device id, also used as mqtt client id and mqtt base topic
+        self.devId = "pigpiomon"  # device id, also used as mqtt client id and mqtt base topic
 
-        self.logfile = "./py-gpio-monitor.log"
+        self.logfile = "./pigpiomon.log"
         self.logLevel = Logger.LOG_INFO
         self.gpios = []  # array of monitored gpios
         self.gpiosSet = []  # array of settable gpios
-        self.configFile = './py-gpio-monitor.ini'
+        self.configFile = './pigpiomon.ini'
         self.qos = 1
 
-        self.parseArgs(argv)
+        self.parse_args(argv)
 
         if len(self.configFile) > 0:
-            self.readConfig(self.configFile)
+            self.read_config(self.configFile)
 
     def help(self):
         print('Usage: '+sys.argv[0] +
@@ -40,9 +43,9 @@ class Config:
         print('  -l | --logfile: log file name,default is '+self.logfile)
         print()
         print('Example: '+sys.argv[0] +
-              ' -c /etc/monitor.ini -v 2 -l /var/log/monitor.log')
+              ' -c /etc/pigpiomon.ini -v 2 -l /var/log/pigpiomon.log')
 
-    def parseArgs(self, argv):
+    def parse_args(self, argv):
         try:
             opts, args = getopt.getopt(
                 argv, "hc:v:l:", ["config=", "verbose=", "logfile="])
@@ -62,13 +65,13 @@ class Config:
             elif opt in ("-l", "--logfile"):
                 self.logfile = arg
 
-    def readConfig(self, cf):
+    def read_config(self, cf):
         print('Using configuration file ', cf)
         config = configparser.ConfigParser()
         config.read(cf)
 
         try:
-            seccfg = config['pygpiomon']
+            seccfg = config['pigpiomon']
         except KeyError:
             print('Error: configuration file is not correct or missing')
             exit(1)
@@ -76,9 +79,9 @@ class Config:
         self.serverUrl = seccfg.get('host', 'localhost')
         self.username = seccfg.get('username')
         self.password = seccfg.get('password')
-        self.devId = seccfg.get('id', 'pyGPIOmon')
+        self.devId = seccfg.get('id', 'pigpiomon')
         self.qos = int(seccfg.get('qos', "1"))
-        a = seccfg.get('gpios_monitor')
+        a = seccfg.get('gpios_mon')
         for g in a.split(','):
             self.gpios.append(int(g))
         a = seccfg.get('gpios_set')
@@ -160,8 +163,8 @@ class App:
         self._mqtt.on_connect = self._on_mqtt_connect
         self._mqtt.on_disconnect = self._on_mqtt_disconnect
 
-        self.log.all("subscribing to MQTT channel", "cmd/"+self.id)
-        self._mqtt.subscribe("cmd/"+self.id, 1)
+        self.log.all("subscribing to MQTT channel", self.id+"/cmd")
+        self._mqtt.subscribe(self.id+"/cmd", 1)
 
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         self.mqtt_connected = rc
@@ -196,7 +199,7 @@ class App:
             self._mqtt.reconnect()
 
 
-class PyGPIOmon:
+class PiGPIOmon:
     GPIOStatesStrings = "on ON 1 off OFF 0"
     GPIOStatesStringsPositive = 7
 
@@ -216,7 +219,7 @@ class PyGPIOmon:
         self._gSet = gpios_set
         print(gpios_set)
         for g in gpios_set:
-            c = "cmd/"+id+"/gpio/"+str(g)
+            c = id+"/cmd/gpio/"+str(g)
             print("print", c, g)
 
             self.log.all("subscribing to MQTT channel", c)
@@ -231,12 +234,12 @@ class PyGPIOmon:
         self._aliveTime = 0
 
     def stop(self):
-        self.log.all("*** PyGPIOmon Shutting down", self._id)
+        self.log.all("*** pigpiomon is shutting down", self._id)
         for g in self._gpios:
             self._gpios[g]['cb'].cancel()
 
     def start(self):
-        self.log.all("*** PyGPIOmon Starting", self._id)
+        self.log.all("*** pigpiomon starting", self._id)
 
         self.log.debug("Monitoring gpios")
         # register callback function for interrupts
@@ -244,7 +247,7 @@ class PyGPIOmon:
         for g in self._gpios:
             self.log.debug(" g=", g)
             self._gpios[g]['cb'] = pi.callback(
-                g, pigpio.EITHER_EDGE, self.gpioCbf)
+                g, pigpio.EITHER_EDGE, self.gpio_cbf)
             self._gpios[g]['t'] = t
 
         print("\nGPIO monitor started.")
@@ -264,7 +267,7 @@ class PyGPIOmon:
         if time.time() - self._aliveTime > 30:
             ts = datetime.datetime.now().isoformat(timespec="seconds")
             self._aliveTime = time.time()
-            self.log.all("pyGPIOmon=", self._id, " is alive")
+            self.log.all("pygpiomon=", self._id, " is alive")
             self.publish('alive', ts, self._qos, retain=True)
 
     def on_mqtt_gpio_set(self, gpio, payload):
@@ -284,7 +287,7 @@ class PyGPIOmon:
         mid = self._mqtt.publish(self._id+'/'+topic, message, qos, retain)[1]
 
     # callback for interrupts
-    def gpioCbf(self, GPIO, level, tick):
+    def gpio_cbf(self, GPIO, level, tick):
         self._gpios[GPIO]['t'] = tick
         self._gpios[GPIO]['u'] = True
         if level == 1:
@@ -294,12 +297,14 @@ class PyGPIOmon:
         self.log.debug("GPIO status changed", GPIO, level, self._gpios[GPIO])
 
 
-def on_message(client, userdata, message):
-    print("MESSAGE", message.payload.decode())
+def stop_script_handler(msg, logger):
+    logger.all(msg)
+    runScript = False
 
 
 # -------------------------------------------------------
-pi = pigpio.pi()  # connect to pigpio daemon
+# connect to pigpio daemon
+pi = pigpio.pi()
 
 if not pi.connected:
     print("Error: Failed connecting to pigpiod. Installed and running?")
@@ -313,10 +318,19 @@ if len(cfg.gpios) == 0:
     cfg.help()
     exit(1)
 
-log = Logger(filename=cfg.logfile, level=cfg.logLevel, console=True)
-
 print("Going to monitor gpios=", cfg.gpios)
 print("Going to set gpios=", cfg.gpiosSet)
+
+# create logger
+log = Logger(filename=cfg.logfile, level=cfg.logLevel, console=True)
+
+# handle gracefull end in case of service stop
+signal.signal(signal.SIGTERM, lambda signo,
+              frame: stop_script_handler("Signal SIGTERM received", log))
+
+# handles gracefull end in case of closing a terminal window
+signal.signal(signal.SIGHUP, lambda signo,
+              frame: stop_script_handler("Signal SIGTERM received", log))
 
 # connect the client to MQTT broker and register a device
 print("Creating MQTT client for", cfg.serverUrl)
@@ -324,28 +338,36 @@ mqttc = mqtt.Client(cfg.devId)
 mqttc.username_pw_set(cfg.username, cfg.password)
 mqttc.connect(cfg.serverUrl)
 
+# create default app object (handles generic mqtt)
 app = App(cfg.devId, mqttc, log)
 
-print("Creating PyGPIOmon device as", cfg.devId)
-device = PyGPIOmon(cfg.devId, pi, mqttc,
+# create object for gpio monitor
+print("Creating pigpiomon device as", cfg.devId)
+device = PiGPIOmon(cfg.devId, pi, mqttc,
                    qos=cfg.qos,
                    logger=log,
                    gpios=cfg.gpios,
                    gpios_set=cfg.gpiosSet)
+
 device.start()
+
+# start thread handling mqtt communication
 mqttc.loop_start()
 
 try:
-    while True:
+    while runScript:
         time.sleep(1)
         app.loop()
         device.loop()
 
 except KeyboardInterrupt:
-    print("\nTidying up")
+    log.all("Signal SIGINT received.")
 
+# perform some cleanup
+log.all("Stopping pigpiomon device ", cfg.devId)
 device.stop()
-log.stop()
 mqttc.disconnect()
 mqttc.loop_stop()
 pi.stop()
+log.all('Stopped.')
+log.stop()
