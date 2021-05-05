@@ -20,7 +20,7 @@ Python script which
 
 # Configuration file
 
-Script reads configuration from ini file located in the script folder or from location provided as command line argument -cFile
+Script reads configuration from ini-style file located in the script folder or from location provided as command line argument.
 
 ```
 [pigpiomon]
