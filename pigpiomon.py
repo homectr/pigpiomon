@@ -222,6 +222,8 @@ class PiGPIOmon:
         self._gpios = {}
         for g in gpios:
             # object constaining gpio statuses
+            pi.set_mode(g, pigpio.INPUT)
+            pi.set_pull_up_down(g, pigpio.PUD_DOWN)
             self._gpios[g] = {'t': 0, 's': 0, 'u': False}
 
         self._gSet = gpios_set
@@ -229,6 +231,7 @@ class PiGPIOmon:
         for g in gpios_set:
             c = id+"/cmd/gpio/"+str(g)
             print("print", c, g)
+            pi.set_mode(g, pigpio.OUTPUT)
 
             self.log.all("subscribing to MQTT channel", c)
             self._mqtt.subscribe(c, 1)
