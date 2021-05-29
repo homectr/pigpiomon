@@ -107,7 +107,8 @@ class Logger:
     LOG_DEBUG = 5
 
     def __init__(self, *, filename="", console=False, level=4):
-        self._f = 0
+        self._filename = filename
+        self._file = False
         self._console = console
         self.logLevel = level
         self.enabled = True
@@ -116,13 +117,12 @@ class Logger:
 
         if filename != "":
             try:
-                self._f = open(filename, "a")
+                f = open(filename, "a")
+                self._file = True
+                f.close()
             except FileNotFoundError:
                 print("Error opening log file", filename)
                 exit(1)
-
-        if self._f == 0:
-            self._console = True
 
     def warn(self, *args):
         self._log(args, level=self.LOG_WARN)
@@ -148,13 +148,14 @@ class Logger:
         line = ts + "  " + self.LogLevels[level]
         for a in args:
             line += (" "+str(a))
-        if self._f:
-            self._f.write(line + "\n")
+
+        if self._file:
+            with open(self._filename, "a") as f:
+                f.write(line + "\n")
         if self._console:
             print(line)
 
     def stop(self):
-        self._f.close()
         self.enabled = False
 
 
@@ -259,7 +260,7 @@ class PiGPIOmon:
 
         print("\nGPIO monitor started.")
         print("Monitoring gpios", self._gpios.keys())
-        print("Settable gpios", self._gSet.keys())
+        print("Settable gpios", self._gSet)
 
     def loop(self):
         t = pi.get_current_tick()
