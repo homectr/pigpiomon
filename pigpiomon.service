@@ -8,3 +8,5 @@ Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=default.target
+Wants=pigpiod.service
+After=network.target pigpiod.service
