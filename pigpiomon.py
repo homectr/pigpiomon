@@ -81,12 +81,19 @@ class Config:
         self.password = seccfg.get('password')
         self.devId = seccfg.get('id', 'pigpiomon')
         self.qos = int(seccfg.get('qos', "1"))
-        a = seccfg.get('gpios_mon')
+        a = seccfg.get('gpios_mon','')
         for g in a.split(','):
-            self.gpios.append(int(g))
-        a = seccfg.get('gpios_set')
+            try:
+                self.gpios.append(int(g))
+            except:
+                print('Warning: wrong gpio in gpio_mon',g)
+        a = seccfg.get('gpios_set','')
         for g in a.split(','):
-            self.gpiosSet.append(int(g))
+            try:
+                self.gpiosSet.append(int(g))
+            except:
+                print('Warning: wrong gpio in gpio_set',g)
+
 
 
 class Logger:
@@ -251,7 +258,8 @@ class PiGPIOmon:
             self._gpios[g]['t'] = t
 
         print("\nGPIO monitor started.")
-        print("Settable gpios", self._gSet)
+        print("Monitoring gpios", self._gpios.keys())
+        print("Settable gpios", self._gSet.keys())
 
     def loop(self):
         t = pi.get_current_tick()
@@ -299,6 +307,7 @@ class PiGPIOmon:
 
 def stop_script_handler(msg, logger):
     logger.all(msg)
+    global runScript
     runScript = False
 
 
@@ -313,7 +322,7 @@ if not pi.connected:
 # parse commandline aruments and read config file if specified
 cfg = Config(sys.argv[1:])
 
-if len(cfg.gpios) == 0:
+if len(cfg.gpios) == 0 and len(cfg.gpiosSet) == 0:
     print("Error: no gpios specified")
     cfg.help()
     exit(1)
@@ -330,7 +339,7 @@ signal.signal(signal.SIGTERM, lambda signo,
 
 # handles gracefull end in case of closing a terminal window
 signal.signal(signal.SIGHUP, lambda signo,
-              frame: stop_script_handler("Signal SIGTERM received", log))
+              frame: stop_script_handler("Signal SIGHUP received", log))
 
 # connect the client to MQTT broker and register a device
 print("Creating MQTT client for", cfg.serverUrl)
