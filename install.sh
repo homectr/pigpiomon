@@ -1,7 +1,9 @@
 #!/bin/bash
+set -x
 echo "Installing pigpiomon script"
 
-check_installed(){
+function check_installed {
+    echo "here"
     local status=$?
     if [ $status -ne 0 ]; then
         echo "error: not installed"
@@ -10,30 +12,31 @@ check_installed(){
     echo "ok"
 }
 
-check_running(){
+function check_running {
+    echo "here2"
     local cnt=`ps aux | grep -c ${1}`
     # assuming running if at least two lines found in ps result
     if [ $cnt -gt 1 ]; then
-        echo "error: not running"
-        exit 1
+        echo "ok"
+        return 0
     fi
-    echo "ok"
+    echo "error: not running"
 }
 
 echo -n "Checking if pigpio is installed... "
-piogpio -v > /dev/null
-check_installed()
+pigpiod -v > /dev/null
+check_installed
 
 echo "Checking if pigpiod is running"
-check_running("pigpiod")
+check_running "pigpiod"
 
 echo "Checking if python3 is installed"
 python3 --version > /dev/null
-check_installed()
+check_installed
 
 echo "Checking if pip is installed"
 python3 -m pip --version > /dev/null
-check_installed()
+check_installed
 
 echo "Installing required python packages"
 python3 -m pip install pigpio paho-mqtt
@@ -43,7 +46,7 @@ sudo mkdir /opt/pigpiomon
 sudo cp ./pigpiomon.py /opt/pigpiomon
 
 echo "Copying default configuration to /etc"
-sudp cp ./pigpiomon.cfg /etc
+sudo cp ./pigpiomon.cfg /etc
 
 echo "Creating log file and configuring logrotate"
 sudo touch /var/log/pigpiomon.log
