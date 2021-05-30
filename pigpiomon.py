@@ -39,7 +39,7 @@ class Config:
               ' -c <configfile> -v <verbose level> -l <logfile>')
         print()
         print('  -c | --config: ini-style configuration file, default is '+self.configFile)
-        print('  -v | --verbose: 0-fatal, 1-error, 2-warning, 3-info, 4-debug')
+        print('  -v | --verbose: 1-fatal, 2-error, 3-warning, 4-info, 5-debug')
         print('  -l | --logfile: log file name,default is '+self.logfile)
         print()
         print('Example: '+sys.argv[0] +
