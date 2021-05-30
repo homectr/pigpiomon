@@ -253,20 +253,26 @@ class PiGPIOmon:
         self.log.all("*** pigpiomon starting", self._id)
 
         self.log.debug("Monitoring gpios")
-        # register callback function for interrupts
-        t = pi.get_current_tick()
+        
+        t = self._pi.get_current_tick()
         for g in self._gpios:
             self.log.debug(" g=", g)
-            self._gpios[g]['cb'] = pi.callback(
+            # register callback function for interrupts
+            self._gpios[g]['cb'] = self._pi.callback(
                 g, pigpio.EITHER_EDGE, self.gpio_cbf)
+            # read initial state
+            self._gpios[g]['s'] == pi.read(g)
+            # set tick of the current state
             self._gpios[g]['t'] = t
+            # set updated to true to publish initial state
+            self._gpios[g]['u'] == True
 
         print("\nGPIO monitor started.")
         print("Monitoring gpios", self._gpios.keys())
         print("Settable gpios", self._gSet)
 
     def loop(self):
-        t = pi.get_current_tick()
+        t = self._pi.get_current_tick()
         for g in self._gpios:
             # announce change only after some stable period
             if (pigpio.tickDiff(self._gpios[g]['t'], t) > 50000 and self._gpios[g]['u'] == True):
