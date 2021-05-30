@@ -95,7 +95,6 @@ class Config:
                 print('Warning: wrong gpio in gpio_set',g)
 
 
-
 class Logger:
     LogLevels = ["A", "F", "E", "W", "I", "D"]
 
@@ -227,11 +226,9 @@ class PiGPIOmon:
             self._gpios[g] = {'t': 0, 's': 0, 'u': False}
 
         self._gSet = gpios_set
-        print(gpios_set)
         for g in gpios_set:
             c = id+"/gpio/"+str(g)+"/cmd"
-            print("print", c, g)
-            pi.set_mode(g, pigpio.OUTPUT)
+            self._pi.set_mode(g, pigpio.OUTPUT)
 
             self.log.all("subscribing to MQTT channel", c)
             self._mqtt.subscribe(c, 1)
@@ -261,7 +258,7 @@ class PiGPIOmon:
             self._gpios[g]['cb'] = self._pi.callback(
                 g, pigpio.EITHER_EDGE, self.gpio_cbf)
             # read initial state
-            self._gpios[g]['s'] == pi.read(g)
+            self._gpios[g]['s'] == self._pi.read(g)
             # set tick of the current state
             self._gpios[g]['t'] = t
             # set updated to true to publish initial state
@@ -278,10 +275,8 @@ class PiGPIOmon:
             if (pigpio.tickDiff(self._gpios[g]['t'], t) > 50000 and self._gpios[g]['u'] == True):
                 self.log.debug('MQTT Sending', g)
                 self._gpios[g]['u'] = False
-                if self._gpios[g]['s'] == 1:
-                    self.publish('gpio/'+str(g), "ON", self._qos)
-                else:
-                    self.publish('gpio/'+str(g), "OFF", self._qos)
+                self.publish('gpio/'+str(g), "ON" if self._gpios[g]['s'] == 1 else "OFF", self._qos)
+
         if time.time() - self._aliveTime > 30:
             ts = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
             self._aliveTime = time.time()
