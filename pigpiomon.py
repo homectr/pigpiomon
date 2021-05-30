@@ -229,7 +229,7 @@ class PiGPIOmon:
         self._gSet = gpios_set
         print(gpios_set)
         for g in gpios_set:
-            c = id+"/cmd/gpio/"+str(g)
+            c = id+"/gpio/"+str(g)
             print("print", c, g)
             pi.set_mode(g, pigpio.OUTPUT)
 

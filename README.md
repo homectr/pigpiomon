@@ -48,7 +48,7 @@ gpios_mon=23
 - `{clientId}/alive` - ISO datetime updated every 30s
 
 ### Subscribes to
-- `{clientid}/cmd/gpio/{gpio}` - gpio status changes "ON/OFF" or "1/0"
+- `{clientid}/gpio/{gpio}` - gpio status changes "ON/OFF" or "1/0"
 
 # Usage
 
