@@ -258,11 +258,11 @@ class PiGPIOmon:
             self._gpios[g]['cb'] = self._pi.callback(
                 g, pigpio.EITHER_EDGE, self.gpio_cbf)
             # read initial state
-            self._gpios[g]['s'] == self._pi.read(g)
+            self._gpios[g]['s'] = self._pi.read(g)
             # set tick of the current state
             self._gpios[g]['t'] = t
             # set updated to true to publish initial state
-            self._gpios[g]['u'] == True
+            self._gpios[g]['u'] = True
 
         print("\nGPIO monitor started.")
         print("Monitoring gpios", self._gpios.keys())
