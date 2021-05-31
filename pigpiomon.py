@@ -209,6 +209,14 @@ class App:
 class PiGPIOmon:
     GPIOStatesStrings = "on ON 1 off OFF 0"
     GPIOStatesStringsPositive = 7
+    
+    # if set to true, monitor will send gpio changes only
+    # if set to false, monitor will send gpio status together with alive update
+    _sendChangesOnly = False
+    
+    _aliveTime = 0
+    # how often will client sent alive information (in seconds)
+    _aliveInterval = 60
 
     def __init__(self, id, pi, mqttClient, *, qos=1, gpios=[], gpios_set=[], logger=Logger()):
 
@@ -237,9 +245,7 @@ class PiGPIOmon:
                 c,
                 lambda client, userdata, message:
                     self.on_mqtt_gpio_set(g, str(message.payload.decode()))
-            )
-
-        self._aliveTime = 0
+            )       
 
     def stop(self):
         self.log.all("*** pigpiomon is shutting down", self._id)
@@ -277,11 +283,14 @@ class PiGPIOmon:
                 self._gpios[g]['u'] = False
                 self.publish('gpio/'+str(g), "ON" if self._gpios[g]['s'] == 1 else "OFF", self._qos)
 
-        if time.time() - self._aliveTime > 30:
+        if time.time() - self._aliveTime > self._aliveInterval:
             ts = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
             self._aliveTime = time.time()
             self.log.all("pygpiomon=", self._id, " is alive")
             self.publish('alive', ts, self._qos, retain=True)
+            if not self._sendChangesOnly:
+                for g in self._gpios:
+                    self.publish('gpio/'+str(g), "ON" if self._gpios[g]['s'] == 1 else "OFF", self._qos)
 
     def on_mqtt_gpio_set(self, gpio, payload):
         i = self.GPIOStatesStrings.find(payload)
