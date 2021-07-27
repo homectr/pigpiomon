@@ -1,6 +1,7 @@
 [Unit]
 Description=PiGPIO Monitor MQTT client
 After=network.target pigpiod.service
+Requires=pigpiod.service
 
 [Service]
 WorkingDirectory=/opt/pigpiomon
@@ -9,4 +10,3 @@ Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=default.target
-Wants=pigpiod.service
