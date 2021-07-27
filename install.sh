@@ -54,7 +54,7 @@ sudo cp ./pigpiomon.logrotate /etc/logrotate.d/pigpiomon
 sudo systemctl restart logrotate
 
 echo "Creating service"
-sudo cp ./pigpiomon.service /lib/systemd/system
+sudo cp ./pigpiomon.service /etc/systemd/system
 sudo systemctl daemon-reload
 sudo systemctl enable pigpiomon.service
 
